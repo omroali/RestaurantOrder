@@ -1,0 +1,115 @@
+[
+  {
+    "id": "cheeseburger",
+    "name": "Cheeseburger",
+    "synonyms": [
+      "cheese burger",
+      "cheeseburgers",
+      "cheese burgers",
+      "burger",
+      "burgers"
+    ],
+    "category": "burger",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": [
+      "no onions",
+      "extra cheese",
+      "no pickles",
+      "no lettuce",
+      "well done",
+      "medium rare",
+      "no sauce"
+    ]
+  },
+  {
+    "id": "chicken_burger",
+    "name": "Chicken Burger",
+    "synonyms": [
+      "chicken sandwich",
+      "crispy chicken",
+      "grilled chicken burger",
+      "chicken burgers",
+      "chicken sandwiches"
+    ],
+    "category": "burger",
+    "required_options": ["style"],
+    "allowed_options": {
+      "style": ["grilled", "crispy"]
+    },
+    "allowed_modifiers": [
+      "no lettuce",
+      "extra sauce",
+      "no sauce",
+      "no pickles",
+      "extra pickles"
+    ]
+  },
+  {
+    "id": "fries",
+    "name": "Fries",
+    "synonyms": ["french fries", "chips", "side of fries", "fry", "french fry"],
+    "category": "side",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": [
+      "no salt",
+      "extra crispy",
+      "with ketchup",
+      "with mayo"
+    ]
+  },
+  {
+    "id": "coke",
+    "name": "Coke",
+    "synonyms": ["cola", "coca cola", "coca-cola", "regular coke", "cokes"],
+    "category": "drink",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": ["no ice", "extra ice", "light ice"]
+  },
+  {
+    "id": "diet_coke",
+    "name": "Diet Coke",
+    "synonyms": ["diet cola", "diet coca cola", "diet cokes"],
+    "category": "drink",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": ["no ice", "extra ice", "light ice"]
+  },
+  {
+    "id": "water",
+    "name": "Water",
+    "synonyms": ["still water", "sparkling water", "bottled water", "waters"],
+    "category": "drink",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": [
+      "sparkling",
+      "still",
+      "no ice",
+      "with lemon",
+      "with ice"
+    ]
+  },
+  {
+    "id": "coffee",
+    "name": "Coffee",
+    "synonyms": ["americano", "black coffee", "hot coffee", "coffees"],
+    "category": "hot_drink",
+    "required_options": [],
+    "allowed_options": {},
+    "allowed_modifiers": [
+      "black",
+      "with milk",
+      "with sugar",
+      "no sugar",
+      "decaf",
+      "extra shot",
+      "oat milk",
+      "soy milk",
+      "with oat milk",
+      "with soy milk"
+    ]
+  }
+]
