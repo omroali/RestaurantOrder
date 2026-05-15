@@ -107,6 +107,10 @@ class StreamingTranscriber:
         self.on_partial: Optional[Callable[[str], None]] = None   # kept for API compat
         self.on_final:   Optional[Callable[[str], None]] = None
 
+        # Barge-in / Interruption handling
+        self.is_robot_speaking = False
+        self.interrupt_multiplier = 6.0   # Scale threshold by this when robot speaks
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -264,10 +268,18 @@ class StreamingTranscriber:
 
             energy = VoiceActivityDetector.rms(chunk)
 
+            # Determine effective threshold (higher if robot is speaking)
+            effective_threshold = threshold
+            if self.is_robot_speaking:
+                effective_threshold *= self.interrupt_multiplier
+
             if not speech_active:
                 pre_buf.append(chunk)
-                _update_noise_floor(energy)
-                if energy > threshold:
+                # Only update base noise floor if robot isn't talking
+                if not self.is_robot_speaking:
+                    _update_noise_floor(energy)
+
+                if energy > effective_threshold:
                     speech_active = True
                     speech_buf    = list(pre_buf)
                     silence_count = 0
@@ -279,8 +291,9 @@ class StreamingTranscriber:
                 if len(speech_buf) > MAX_N:
                     speech_buf = speech_buf[-MAX_N:]
 
-                if energy <= threshold:
-                    _update_noise_floor(energy)
+                if energy <= effective_threshold:
+                    if not self.is_robot_speaking:
+                        _update_noise_floor(energy)
                     silence_count += 1
                     if silence_count >= SILENCE_N:
                         # ── Speech ended: transcribe ──────────────────────

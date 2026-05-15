@@ -48,11 +48,18 @@ Step 5  roslaunch entry:
 import os
 import sys
 import threading
+import time
 from typing import List, Optional
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
+
+try:
+    import pyttsx3
+    _TTS_AVAILABLE = True
+except ImportError:
+    _TTS_AVAILABLE = False
 
 from src.hotword import HotwordDetector
 from src.ipc import (
@@ -61,6 +68,7 @@ from src.ipc import (
     SVC_START_ORDER,
     TOPIC_INTERRUPTION,
     TOPIC_ORDER_RESULT,
+    TOPIC_ROBOT_PROMPT,
     TOPIC_TRANSCRIPT,
     TOPIC_WAKE_WORD,
 )
@@ -106,7 +114,18 @@ class VoiceListenerNode:
             silence_duration = silence_dur,
         )
 
+        self._tts_engine = None
+        if _TTS_AVAILABLE:
+            try:
+                self._tts_engine = pyttsx3.init()
+                self._tts_engine.setProperty('rate', 175)
+                self._tts_engine.setProperty('volume', 1.0)
+            except Exception as e:
+                print(f"[VoiceListener] Warning: Could not initialize TTS: {e}")
+                self._tts_engine = None
+
         bus.subscribe(TOPIC_ORDER_RESULT, self._on_order_result)
+        bus.subscribe(TOPIC_ROBOT_PROMPT, self._on_robot_prompt)
 
         # ### ROS INTEGRATION – TTS hook ###
         # Uncomment and implement when adding spoken robot output:
@@ -174,6 +193,12 @@ class VoiceListenerNode:
 
         print(f"\n[You said]: {text}")
 
+        # If we got text while robot was speaking, it's a barge-in
+        if self._stt.is_robot_speaking:
+            print("[VoiceListener] Barge-in detected!")
+            self._stt.is_robot_speaking = False
+            self._bus.publish(TOPIC_INTERRUPTION, text)
+
         if self._state == _IDLE:
             self._check_wake_word(text)
 
@@ -218,6 +243,36 @@ class VoiceListenerNode:
     # ------------------------------------------------------------------
     # Bus callbacks
     # ------------------------------------------------------------------
+
+    def _on_robot_prompt(self, text: str) -> None:
+        """
+        Robot is speaking. Temporarily desensitize VAD to prevent self-echo.
+        """
+        self._stt.is_robot_speaking = True
+
+        if self._tts_engine:
+            def _speak():
+                try:
+                    # Fresh init for the thread
+                    engine = pyttsx3.init()
+                    engine.setProperty('rate', 175)
+                    engine.say(text)
+                    engine.runAndWait()
+                except Exception as e:
+                    print(f"[VoiceListener] TTS Error: {e}")
+                finally:
+                    self._stt.is_robot_speaking = False
+
+            threading.Thread(target=_speak, daemon=True).start()
+        else:
+            # Fallback: estimate speaking duration
+            def _reset_speaking():
+                # ~3 words per second + 0.5s buffer
+                duration = max(1.0, len(text.split()) / 3.0 + 0.5)
+                time.sleep(duration)
+                self._stt.is_robot_speaking = False
+
+            threading.Thread(target=_reset_speaking, daemon=True).start()
 
     def _on_order_result(self, payload) -> None:
         """Session ended (confirmed or cancelled). Return to IDLE."""

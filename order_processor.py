@@ -60,12 +60,12 @@ if _HERE not in sys.path:
 
 from src.dialogue_manager import DialogueManager
 from src.ipc import (
-    MessageBus,
     SVC_CANCEL_ORDER,
     SVC_START_ORDER,
     TOPIC_ORDER_RESULT,
     TOPIC_ROBOT_PROMPT,
     TOPIC_TRANSCRIPT,
+    MessageBus,
 )
 
 
@@ -79,17 +79,23 @@ class OrderProcessorNode:
     menu : list[dict]  – loaded menu data
     """
 
-    def __init__(self, bus: MessageBus, menu: List[dict], table_id: str = "default") -> None:
-        self._bus     = bus
-        self._menu    = menu
-        self._table_id = table_id # Store the table_id this node is responsible for
-        self._manager = DialogueManager(self._menu) # DialogueManager handles per-table state internally
-        self._active_sessions: Dict[str, bool] = {} # Track active sessions per table_id
-        self._lock    = threading.Lock()   # guards _active_sessions
-        self._stop    = threading.Event()
+    def __init__(
+        self, bus: MessageBus, menu: List[dict], table_id: str = "default"
+    ) -> None:
+        self._bus = bus
+        self._menu = menu
+        self._table_id = table_id  # Store the table_id this node is responsible for
+        self._manager = DialogueManager(
+            self._menu
+        )  # DialogueManager handles per-table state internally
+        self._active_sessions: Dict[
+            str, bool
+        ] = {}  # Track active sessions per table_id
+        self._lock = threading.Lock()  # guards _active_sessions
+        self._stop = threading.Event()
 
         # Advertise services
-        bus.advertise_service(SVC_START_ORDER,  self._handle_start)
+        bus.advertise_service(SVC_START_ORDER, self._handle_start)
         bus.advertise_service(SVC_CANCEL_ORDER, self._handle_cancel)
 
         # Subscribe to transcripts – this is the main event driver
@@ -125,29 +131,51 @@ class OrderProcessorNode:
     # Service handlers
     # ------------------------------------------------------------------
 
-    def _handle_start(self, _=None) -> dict: # In prototype, table_id is from self._table_id
+    def _handle_start(
+        self, _=None
+    ) -> dict:  # In prototype, table_id is from self._table_id
         """Start a new ordering session for this node's table_id."""
         with self._lock:
             if self._active_sessions.get(self._table_id, False):
-                return {"success": False, "message": f"Session for table {self._table_id} already active"}
+                return {
+                    "success": False,
+                    "message": f"Session for table {self._table_id} already active",
+                }
             self._active_sessions[self._table_id] = True
             # DialogueManager is initialized once in __init__ and manages internal state per table_id
 
-        self._emit_prompt("Hello! What would you like to order today?", self._table_id)
-        return {"success": True, "message": f"Session for table {self._table_id} started"}
+        self._emit_prompt(
+            "Hello! I'll be serving you today. If you would like to learn what we have, please ask about what's on the menu \
+            otherwise, you can let me know what you'd like",
+            self._table_id,
+        )
+        return {
+            "success": True,
+            "message": f"Session for table {self._table_id} started",
+        }
 
-    def _handle_cancel(self, _=None) -> dict: # In prototype, table_id is from self._table_id
+    def _handle_cancel(
+        self, _=None
+    ) -> dict:  # In prototype, table_id is from self._table_id
         """Abort the active session for this node's table_id."""
         with self._lock:
             was_active = self._active_sessions.pop(self._table_id, False)
             if was_active:
-                self._manager.reset(table_id=self._table_id) # Reset the dialogue manager's state for this table
+                self._manager.reset(
+                    table_id=self._table_id
+                )  # Reset the dialogue manager's state for this table
 
         if was_active:
             self._emit_prompt("Understood – cancelling your order.", self._table_id)
-            self._bus.publish(TOPIC_ORDER_RESULT, None) # Publish None for cancellation
-            return {"success": True, "message": f"Cancelled order for table {self._table_id}"}
-        return {"success": False, "message": f"No active session for table {self._table_id}"}
+            self._bus.publish(TOPIC_ORDER_RESULT, None)  # Publish None for cancellation
+            return {
+                "success": True,
+                "message": f"Cancelled order for table {self._table_id}",
+            }
+        return {
+            "success": False,
+            "message": f"No active session for table {self._table_id}",
+        }
 
     # ------------------------------------------------------------------
     # Transcript handler  (the main event)
@@ -168,17 +196,25 @@ class OrderProcessorNode:
         with self._lock:
             if not self._active_sessions.get(self._table_id, False):
                 return
-            manager = self._manager   # local ref (manager is guaranteed to exist from __init__)
+            manager = (
+                self._manager
+            )  # local ref (manager is guaranteed to exist from __init__)
 
         response, done = manager.process_input(text, table_id=self._table_id)
         self._emit_prompt(response, self._table_id)
 
         if done:
             with self._lock:
-                self._active_sessions[self._table_id] = False # Deactivate session for this table
-                self._manager.reset(table_id=self._table_id) # Reset the DialogueManager's state for this table
+                self._active_sessions[self._table_id] = (
+                    False  # Deactivate session for this table
+                )
+                self._manager.reset(
+                    table_id=self._table_id
+                )  # Reset the DialogueManager's state for this table
             self._bus.publish(TOPIC_ORDER_RESULT, response)
-            print(f"\n[OrderProcessor] Order confirmed and published for table {self._table_id}.")
+            print(
+                f"\n[OrderProcessor] Order confirmed and published for table {self._table_id}."
+            )
 
     # ------------------------------------------------------------------
     # Helpers

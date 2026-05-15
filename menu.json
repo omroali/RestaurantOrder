@@ -62,7 +62,15 @@
   {
     "id": "coke",
     "name": "Coke",
-    "synonyms": ["cola", "coca cola", "coca-cola", "regular coke", "cokes"],
+    "synonyms": [
+      "cola",
+      "coca cola",
+      "coca-cola",
+      "regular coke",
+      "cokes",
+      "coaks",
+      "coak"
+    ],
     "category": "drink",
     "required_options": [],
     "allowed_options": {},
@@ -71,7 +79,7 @@
   {
     "id": "diet_coke",
     "name": "Diet Coke",
-    "synonyms": ["diet cola", "diet coca cola", "diet cokes"],
+    "synonyms": ["diet cola", "diet coca cola", "diet cokes", "diet coaks"],
     "category": "drink",
     "required_options": [],
     "allowed_options": {},

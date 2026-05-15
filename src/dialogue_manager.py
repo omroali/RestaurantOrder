@@ -37,7 +37,6 @@ from .models import OrderItem
 from .order_parser import OrderParser
 from .order_state import OrderState
 
-
 # All valid states – kept here for documentation / introspection purposes.
 DIALOGUE_STATES: List[str] = [
     "idle",
@@ -50,13 +49,13 @@ DIALOGUE_STATES: List[str] = [
     "correcting",
     "confirmed",
 ]
-from typing import Any, Dict, List, Optional, Tuple
 import re
+from typing import Any, Dict, List, Optional, Tuple
 
 from src import utils
 from src.models import OrderItem
-from src.order_state import OrderState
 from src.order_parser import OrderParser
+from src.order_state import OrderState
 
 
 class DialogueManager:
@@ -126,6 +125,17 @@ class DialogueManager:
         current_state = table_state["state"]
         pending_clarification = table_state["pending_clarification"]
 
+        # Global intent: Menu Inquiry
+        if utils.is_menu_inquiry(text):
+            return (utils.format_menu_list(self.menu), False)
+
+        # Global intent: Halal Inquiry
+        if utils.is_halal_inquiry(text):
+            return (
+                "Yes, I'm happy to announce that everything we have today is halal.",
+                False,
+            )
+
         # Route based on current state
         if current_state == "awaiting_confirmation":
             return self._handle_confirmation(text, table_id)
@@ -162,7 +172,7 @@ class DialogueManager:
             return (
                 "Sorry, I couldn't find any menu items in that. "
                 "Could you try again?\n"
-                "For example: \"I'd like a cheeseburger and a large Coke.\"",
+                'For example: "I\'d like a cheeseburger and a large Coke."',
                 False,
             )
 
@@ -244,7 +254,7 @@ class DialogueManager:
             return (
                 "I'm not sure what you'd like to change. "
                 "Could you describe the update? "
-                "For example: \"change the Coke to a Diet Coke\".",
+                'For example: "change the Coke to a Diet Coke".',
                 False,
             )
 
@@ -285,10 +295,14 @@ class DialogueManager:
             m = re.search(r"\b(\w+)\s+more\b", normalised)
             if m:
                 word = m.group(1)
-                n = utils.QUANTITY_WORDS.get(word) or (int(word) if word.isdigit() else 0)
+                n = utils.QUANTITY_WORDS.get(word) or (
+                    int(word) if word.isdigit() else 0
+                )
                 increment = n if n > 0 else 1
                 # Remove "N more" from the text to leave just the item name
-                parse_text = (normalised[: m.start()] + " " + normalised[m.end():]).strip()
+                parse_text = (
+                    normalised[: m.start()] + " " + normalised[m.end() :]
+                ).strip()
             else:
                 increment = 1
                 parse_text = re.sub(r"\bmore\b", "", normalised).strip()
@@ -386,8 +400,7 @@ class DialogueManager:
         if not removed:
             names = ", ".join(not_found)
             return (
-                f"I don't see {names} in your order. "
-                "What would you like to remove?",
+                f"I don't see {names} in your order. What would you like to remove?",
                 False,
             )
 
@@ -424,9 +437,7 @@ class DialogueManager:
             allowed = menu_entry.get("allowed_options", {}).get(option_name, [])
             for value in allowed:
                 if value.lower() in text.lower():
-                    order_state.update_item(
-                        item.item_id, options={option_name: value}
-                    )
+                    order_state.update_item(item.item_id, options={option_name: value})
                     table_state["pending_clarification"] = None
                     return self._build_response(table_id=table_id)
 
@@ -442,7 +453,9 @@ class DialogueManager:
     # Response builder
     # ------------------------------------------------------------------
 
-    def _build_response(self, prefix: str = "", table_id: str = "default") -> Tuple[str, bool]:
+    def _build_response(
+        self, prefix: str = "", table_id: str = "default"
+    ) -> Tuple[str, bool]:
         """
         Check for missing required options; if any remain, ask a clarification
         question.  Otherwise generate a confirmation prompt.

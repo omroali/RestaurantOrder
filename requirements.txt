@@ -36,6 +36,10 @@ pyaudio>=0.2.14
 # ------------------------------------
 colorama>=0.4.6
 #
+# OPTIONAL – Text-to-Speech (robot voice)
+# ----------------------------------------
+pyttsx3>=2.90
+#
 #
 # DEVELOPMENT / TESTING
 # ----------------------

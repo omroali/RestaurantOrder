@@ -22,6 +22,7 @@ QUANTITY_WORDS: dict = {
     "an": 1,
     "one": 1,
     "two": 2,
+    " couple": 2,
     "three": 3,
     "four": 4,
     "five": 5,
