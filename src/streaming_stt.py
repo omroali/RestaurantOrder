@@ -10,10 +10,12 @@ lost chunks whenever the base model took >100 ms to transcribe).
     Thread 1 – recorder  (lightweight, never blocks):
         pyaudio → 20 ms chunks → queue  (unbounded, drops oldest if full)
 
-    Thread 2 – processor (can be slow during Whisper):
+Thread 2 – processor (can be slow during Whisper):
         queue → energy VAD → speech buffer
                                   │
                         silence ≥ silence_duration
+                                  │
+                    wait confirmation_delay more
                                   │
                              Whisper (beam=5)
                                   │
@@ -73,7 +75,8 @@ class StreamingTranscriber:
     ----------
     model_size       : str    – faster-whisper model ("tiny","base","small",…)
     language         : str    – force language code ("en")
-    silence_duration : float  – seconds of silence that ends an utterance
+    silence_duration : float  – seconds of silence before confirmation starts
+    confirmation_delay : float – extra silence to wait before finalizing
     sample_rate      : int    – audio sample rate (must match pyaudio stream)
     """
 
@@ -85,31 +88,52 @@ class StreamingTranscriber:
         self,
         model_size:       str   = "base",
         language:         str   = "en",
+        device:           str   = "cpu",
+        compute_type:     str   = "int8",
         silence_duration: float = 0.8,
+        confirmation_delay: float = 2.0,
+        max_utterance_seconds: float = 10.0,
+        pre_buffer_seconds: float = 0.4,
+        interrupt_multiplier: float = 6.0,
+        enable_ambient_calibration: bool = True,
+        ambient_calibration_interval: float = 60.0,
+        calibration_noise_floor_default: Optional[float] = None,
+        calibration_threshold_default: Optional[float] = None,
+        queue_maxsize: int = _QUEUE_MAXSIZE,
         # partial_interval is accepted for API compatibility but no longer used
         partial_interval: float = 0.3,
         sample_rate:      int   = 16_000,
     ) -> None:
         self.model_size       = model_size
         self.language         = language
+        self.device           = device
+        self.compute_type     = compute_type
         self.silence_duration = silence_duration
+        self.confirmation_delay = max(0.0, confirmation_delay)
+        self.max_utterance_seconds = max(1.0, max_utterance_seconds)
+        self.pre_buffer_seconds = max(0.0, pre_buffer_seconds)
         self.sample_rate      = sample_rate
+        self.enable_ambient_calibration = enable_ambient_calibration
+        self.ambient_calibration_interval = max(1.0, ambient_calibration_interval)
+        self.calibration_noise_floor_default = calibration_noise_floor_default
+        self.calibration_threshold_default = calibration_threshold_default
 
         self._model:      Optional["WhisperModel"] = None
         self._stop        = threading.Event()
         self._calibrated  = threading.Event()
         self._threshold:  Optional[float] = None
-        self._chunk_queue: queue.Queue = queue.Queue(maxsize=self._QUEUE_MAXSIZE)
+        self._chunk_queue: queue.Queue = queue.Queue(maxsize=max(1, queue_maxsize))
 
         self._rec_thread:  Optional[threading.Thread] = None
         self._proc_thread: Optional[threading.Thread] = None
+        self._last_calibration_time: float = 0.0
 
         self.on_partial: Optional[Callable[[str], None]] = None   # kept for API compat
         self.on_final:   Optional[Callable[[str], None]] = None
 
         # Barge-in / Interruption handling
         self.is_robot_speaking = False
-        self.interrupt_multiplier = 6.0   # Scale threshold by this when robot speaks
+        self.interrupt_multiplier = interrupt_multiplier   # Scale threshold when robot speaks
 
     # ------------------------------------------------------------------
     # Public interface
@@ -216,8 +240,15 @@ class StreamingTranscriber:
             self._calibrated.set()   # unblock start() to avoid deadlock
             return
 
-        vad.calibrate()
-        self._threshold = vad.threshold
+        # Use default calibration if provided, otherwise calibrate fresh
+        if self.calibration_threshold_default is not None:
+            self._threshold = self.calibration_threshold_default
+            print(f"[Calibration] Using provided threshold default: {self._threshold:.1f}")
+        else:
+            vad.calibrate()
+            self._threshold = vad.threshold
+            print(f"[Calibration] Initial ambient noise floor calibrated at threshold: {self._threshold:.1f}")
+        
         self._calibrated.set()       # signal processor thread to start
 
         try:
@@ -240,11 +271,16 @@ class StreamingTranscriber:
         """
         CHUNK_MS  = VoiceActivityDetector.CHUNK_MS
         SILENCE_N = max(1, int(self.silence_duration * 1000 / CHUNK_MS))
-        MAX_N     = int(10.0 * 1000 / CHUNK_MS)   # 10 s hard cap
-        PRE_N     = int(0.4  * 1000 / CHUNK_MS)   # 400 ms pre-buffer
+        CONFIRM_N = max(1, int(self.confirmation_delay * 1000 / CHUNK_MS))
+        MAX_N     = max(1, int(self.max_utterance_seconds * 1000 / CHUNK_MS))
+        PRE_N     = max(1, int(self.pre_buffer_seconds * 1000 / CHUNK_MS))
 
         threshold = self._threshold or 50.0
-        noise_floor = (threshold / 3.0) if self._threshold else None
+        # Use default noise floor if provided, otherwise derive from threshold
+        if self.calibration_noise_floor_default is not None:
+            noise_floor = self.calibration_noise_floor_default
+        else:
+            noise_floor = (threshold / 3.0) if self._threshold else None
         NOISE_ALPHA = 0.05
 
         def _update_noise_floor(energy: float) -> None:
@@ -259,6 +295,7 @@ class StreamingTranscriber:
         speech_buf:    list  = []
         speech_active: bool  = False
         silence_count: int   = 0
+        confirm_count: int   = 0
 
         while not self._stop.is_set():
             try:
@@ -268,21 +305,36 @@ class StreamingTranscriber:
 
             energy = VoiceActivityDetector.rms(chunk)
 
-            # Determine effective threshold (higher if robot is speaking)
-            effective_threshold = threshold
+            # If robot is speaking, discard audio to prevent self-echo
+            # Don't just raise threshold - completely skip speech detection
             if self.is_robot_speaking:
-                effective_threshold *= self.interrupt_multiplier
+                pre_buf.append(chunk)  # Keep pre-buffer for when robot stops
+                continue
+
+            # Determine effective threshold for normal operation
+            effective_threshold = threshold
 
             if not speech_active:
                 pre_buf.append(chunk)
-                # Only update base noise floor if robot isn't talking
-                if not self.is_robot_speaking:
-                    _update_noise_floor(energy)
+                _update_noise_floor(energy)
+                
+                # Periodic ambient calibration during idle
+                if self.enable_ambient_calibration:
+                    current_time = time.time()
+                    if current_time - self._last_calibration_time >= self.ambient_calibration_interval:
+                        self._last_calibration_time = current_time
+                        # Recalibrate by resetting noise floor to current energy
+                        # This allows the system to adapt to changing ambient conditions
+                        old_threshold = threshold
+                        noise_floor = energy
+                        threshold = max(noise_floor * 3.0, 50.0)
+                        print(f"[Calibration] Ambient recalibration: noise_floor={noise_floor:.1f}, threshold={threshold:.1f} (was {old_threshold:.1f})")
 
                 if energy > effective_threshold:
                     speech_active = True
                     speech_buf    = list(pre_buf)
                     silence_count = 0
+                    confirm_count = 0
                     print("\n[Speaking…] ", end="", flush=True)
             else:
                 speech_buf.append(chunk)
@@ -292,10 +344,16 @@ class StreamingTranscriber:
                     speech_buf = speech_buf[-MAX_N:]
 
                 if energy <= effective_threshold:
-                    if not self.is_robot_speaking:
-                        _update_noise_floor(energy)
+                    _update_noise_floor(energy)
                     silence_count += 1
                     if silence_count >= SILENCE_N:
+                        confirm_count += 1
+                        if confirm_count == 1:
+                            print("[Pausing…] ", end="", flush=True)
+                    else:
+                        confirm_count = 0
+
+                    if confirm_count >= CONFIRM_N:
                         # ── Speech ended: transcribe ──────────────────────
                         print("[Transcribing…]", flush=True)
                         audio = b"".join(speech_buf)
@@ -306,8 +364,10 @@ class StreamingTranscriber:
                         speech_buf    = []
                         speech_active = False
                         silence_count = 0
+                        confirm_count = 0
                 else:
                     silence_count = 0
+                    confirm_count = 0
 
     # ------------------------------------------------------------------
     # Transcription
@@ -358,8 +418,8 @@ class StreamingTranscriber:
             print(f"\n[StreamingSTT] Loading Whisper '{self.model_size}' …")
             self._model = WhisperModel(
                 self.model_size,
-                device       = "cpu",
-                compute_type = "int8",
+                device       = self.device,
+                compute_type = self.compute_type,
             )
             print("[StreamingSTT] Model ready.")
         return self._model

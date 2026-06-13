@@ -82,6 +82,16 @@ pip install pytest
 pytest tests/ -v
 ```
 
+### Live speech config
+
+The live voice launcher reads `config/speech.yaml` for wake words, Whisper
+model, silence timing, confirmation delay, and other speech runtime settings.
+The menu still lives in `menu.json`.
+
+```bash
+python run_voice.py --speech-config config/speech.yaml
+```
+
 ---
 
 ## Example interaction

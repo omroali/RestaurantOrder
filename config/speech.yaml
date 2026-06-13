@@ -1,0 +1,34 @@
+wake_words:
+  - hey tiago
+  - excuse me
+  - order please
+  - waiter
+  - hi tiago
+  - order
+
+stt_model: base
+language: en
+device: cpu
+compute_type: int8
+
+silence_dur: 0.9
+confirm_delay: 2.0
+sample_rate: 16000
+pre_buffer_seconds: 0.4
+max_utterance_seconds: 10.0
+interrupt_multiplier: 6.0
+
+# Continuous ambient noise calibration
+# The system adapts to changing noise levels (e.g. background chatter, machinery)
+enable_ambient_calibration: true
+ambient_calibration_interval: 20.0  # seconds between recalibrations during idle
+
+# Default calibration values (learned from the environment)
+# These are used as starting points to speed up startup.
+# Leave empty/null to auto-calibrate on every startup.
+# Update these with values from [Calibration] logs when you have a good baseline.
+calibration_noise_floor_default: 2244.1  # e.g., 610.8
+calibration_threshold_default: 6732.2    # e.g., 1832.5
+
+tts_rate: 175
+tts_volume: 1.0

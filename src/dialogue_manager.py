@@ -29,33 +29,16 @@ integrate a full dialogue framework (e.g. Rasa, ConvLab) for multi-turn
 intent tracking.
 """
 
+import json
+import os
 import re
-from typing import List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from . import utils
 from .models import OrderItem
 from .order_parser import OrderParser
 from .order_state import OrderState
-
-# All valid states – kept here for documentation / introspection purposes.
-DIALOGUE_STATES: List[str] = [
-    "idle",
-    "listening",
-    "transcribing",
-    "extracting_order",
-    "clarifying",
-    "summarising",
-    "awaiting_confirmation",
-    "correcting",
-    "confirmed",
-]
-import re
-from typing import Any, Dict, List, Optional, Tuple
-
-from src import utils
-from src.models import OrderItem
-from src.order_parser import OrderParser
-from src.order_state import OrderState
 
 
 class DialogueManager:
@@ -83,6 +66,10 @@ class DialogueManager:
         self.parser = OrderParser(menu)
         # Stores per-table state: {table_id: {"order_state": OrderState, "state": str, "pending_clarification": Optional[Tuple[OrderItem, List[str]]]}}
         self._tables: Dict[str, Dict[str, Any]] = {}
+        
+        # Create orders directory if it doesn't exist
+        self.orders_dir = os.path.join(os.path.dirname(__file__), "..", "orders")
+        os.makedirs(self.orders_dir, exist_ok=True)
 
     def _get_table_state(self, table_id: str) -> Dict[str, Any]:
         """Retrieve or initialise the state for a given table_id."""
@@ -93,6 +80,23 @@ class DialogueManager:
                 "pending_clarification": None,
             }
         return self._tables[table_id]
+
+    def _save_order(self, table_id: str, order_json: str) -> str:
+        """
+        Save the confirmed order to a JSON file in the orders/ directory.
+
+        Returns the path to the saved file.
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"order_{table_id}_{timestamp}.json"
+        filepath = os.path.join(self.orders_dir, filename)
+        
+        with open(filepath, "w") as f:
+            # Parse and re-write to pretty-print
+            data = json.loads(order_json)
+            json.dump(data, f, indent=2)
+        
+        return filepath
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -206,7 +210,11 @@ class DialogueManager:
         if utils.is_affirmative(text):
             table_state["state"] = "confirmed"
             final_json = order_state.to_json()
-            return (final_json, True)
+            order_file = self._save_order(table_id, final_json)
+            summary = order_state.generate_summary()
+            confirmation_msg = f"Perfect! Your order has been confirmed and saved. {summary}"
+            print(f"\n[Order saved to: {order_file}]")
+            return (confirmation_msg, True)
 
         if utils.is_negative(text):
             table_state["state"] = "correcting"

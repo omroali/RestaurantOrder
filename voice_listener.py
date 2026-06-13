@@ -4,7 +4,7 @@ voice_listener.py  –  Always-on voice listener node.
 
 Runs StreamingTranscriber in the background, which emits:
   • on_partial(text)  – live updates while the user is still speaking
-  • on_final(text)    – accurate transcript once silence is detected
+  • on_final(text)    – accurate transcript once speech has paused long enough
 
 For each final transcript the node:
   • In IDLE    state: checks for a wake word → calls SVC_START_ORDER
@@ -27,8 +27,7 @@ Step 2  Audio source → ROS audio driver:
 
 Step 3  on_partial / on_final → ROS TTS / speech display:
     Publish on_final text to /restaurant/transcript (std_msgs/String).
-    Publish on_partial text to /restaurant/transcript_partial for debugging
-.
+    Publish on_partial text to /restaurant/transcript_partial for debugging.
     Publish on_final to /robot/speech (std_msgs/String) so a TTS node
     (sound_play, piper-ros) can vocalise robot prompts.
 
@@ -41,6 +40,7 @@ Step 5  roslaunch entry:
         <param name="wake_words"    value="hey tiago,excuse me,order please"/>
         <param name="stt_model"     value="base"/>
         <param name="silence_dur"   value="0.6"/>
+        <param name="confirm_delay" value="2.0"/>
     </node>
 ──────────────────────────────────────────────────────────────────────────────
 """
@@ -93,7 +93,19 @@ class VoiceListenerNode:
     bus            : MessageBus   –  shared communication channel
     wake_words     : list[str]    –  override default hotword list
     stt_model      : str          –  Whisper model for transcription
-    silence_dur    : float        –  seconds of silence that ends an utterance
+    silence_dur       : float     –  seconds of silence before confirmation starts
+    confirmation_delay: float     –  extra silence before finalizing speech
+    language       : str          –  STT language code
+    device         : str          –  Whisper device
+    compute_type   : str          –  Whisper compute type
+    sample_rate    : int          –  microphone sample rate
+    pre_buffer_seconds : float    –  audio kept before speech triggers
+    max_utterance_seconds : float –  hard cap on one utterance
+    interrupt_multiplier : float  –  threshold multiplier while robot speaks
+    tts_rate         : int        –  TTS speaking rate
+    tts_volume       : float      –  TTS volume
+    enable_ambient_calibration : bool –  enable continuous noise floor recalibration
+    ambient_calibration_interval : float – seconds between recalibrations during idle
     partial_interval : float      –  seconds between live partial updates
     """
 
@@ -103,23 +115,51 @@ class VoiceListenerNode:
         wake_words:   Optional[List[str]] = None,
         stt_model:    str   = "base",
         silence_dur:  float = 0.8,
+        confirmation_delay: float = 2.0,
+        language: str = "en",
+        device: str = "cpu",
+        compute_type: str = "int8",
+        sample_rate: int = 16_000,
+        pre_buffer_seconds: float = 0.4,
+        max_utterance_seconds: float = 10.0,
+        interrupt_multiplier: float = 6.0,
+        tts_rate: int = 175,
+        tts_volume: float = 1.0,
+        enable_ambient_calibration: bool = True,
+        ambient_calibration_interval: float = 60.0,
+        calibration_noise_floor_default: Optional[float] = None,
+        calibration_threshold_default: Optional[float] = None,
     ) -> None:
         self._bus   = bus
         self._state = _IDLE
         self._stop  = threading.Event()
+        self._tts_rate = tts_rate
+        self._tts_volume = tts_volume
 
         self._hotword = HotwordDetector(wake_words=wake_words)
         self._stt     = StreamingTranscriber(
             model_size       = stt_model,
+            language         = language,
+            device           = device,
+            compute_type     = compute_type,
             silence_duration = silence_dur,
+            confirmation_delay = confirmation_delay,
+            sample_rate      = sample_rate,
+            pre_buffer_seconds = pre_buffer_seconds,
+            max_utterance_seconds = max_utterance_seconds,
+            interrupt_multiplier = interrupt_multiplier,
+            enable_ambient_calibration = enable_ambient_calibration,
+            ambient_calibration_interval = ambient_calibration_interval,
+            calibration_noise_floor_default = calibration_noise_floor_default,
+            calibration_threshold_default = calibration_threshold_default,
         )
 
         self._tts_engine = None
         if _TTS_AVAILABLE:
             try:
                 self._tts_engine = pyttsx3.init()
-                self._tts_engine.setProperty('rate', 175)
-                self._tts_engine.setProperty('volume', 1.0)
+                self._tts_engine.setProperty('rate', tts_rate)
+                self._tts_engine.setProperty('volume', tts_volume)
             except Exception as e:
                 print(f"[VoiceListener] Warning: Could not initialize TTS: {e}")
                 self._tts_engine = None
@@ -255,7 +295,8 @@ class VoiceListenerNode:
                 try:
                     # Fresh init for the thread
                     engine = pyttsx3.init()
-                    engine.setProperty('rate', 175)
+                    engine.setProperty('rate', self._tts_rate)
+                    engine.setProperty('volume', self._tts_volume)
                     engine.say(text)
                     engine.runAndWait()
                 except Exception as e:

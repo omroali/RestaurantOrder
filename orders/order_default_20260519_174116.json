@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "line_id": 1,
+      "item_id": "fries",
+      "display_name": "Fries",
+      "quantity": 1,
+      "size": null,
+      "options": {},
+      "modifiers": [],
+      "confidence": 1.0
+    }
+  ],
+  "status": "confirmed",
+  "confirmation_text": "Order confirmed: one Fries"
+}

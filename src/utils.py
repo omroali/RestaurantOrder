@@ -218,3 +218,94 @@ def is_correction(text: str) -> bool:
         if re.search(r"\b" + re.escape(trigger) + r"\b", normalized):
             return True
     return False
+
+
+def is_menu_inquiry(text: str) -> bool:
+    """
+    Return True if the user is asking about the menu.
+
+    Examples that return True:
+        "what's on the menu"
+        "what do you have"
+        "what can I order"
+        "show me the menu"
+        "tell me about the menu"
+    """
+    normalized = normalize_text(text)
+    menu_triggers = [
+        r"\bmenu\b",
+        r"\bwhat\s+(?:do\s+)?you\s+have\b",
+        r"\bwhat\s+can\s+i\s+(?:order|get)\b",
+        r"\bwhat\s+(?:is\s+)?available\b",
+        r"\bshow\s+(?:me\s+)?(?:the\s+)?menu\b",
+        r"\btell\s+me\s+about\s+(?:the\s+)?menu\b",
+        r"\boptions\b",
+        r"\bitems\b",
+    ]
+    for trigger in menu_triggers:
+        if re.search(trigger, normalized):
+            return True
+    return False
+
+
+def is_halal_inquiry(text: str) -> bool:
+    """
+    Return True if the user is asking about halal.
+
+    Examples that return True:
+        "is it halal"
+        "is everything halal"
+        "do you have halal"
+    """
+    normalized = normalize_text(text)
+    halal_triggers = [
+        r"\bhalal\b",
+    ]
+    for trigger in halal_triggers:
+        if re.search(trigger, normalized):
+            return True
+    return False
+
+
+def format_menu_list(menu: list) -> str:
+    """
+    Format the menu data into a readable list for display.
+
+    Parameters
+    ----------
+    menu : list
+        Menu items as loaded from menu.json.
+
+    Returns
+    -------
+    str
+        Formatted menu string ready for TTS.
+    """
+    if not menu:
+        return "I'm sorry, the menu is not available right now."
+
+    # Group items by category
+    categories = {}
+    for item in menu:
+        category = item.get("category", "Other")
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(item.get("name", "Unknown"))
+
+    lines = ["Here's what we have available:"]
+    category_names = {
+        "burger": "Burgers",
+        "side": "Sides",
+        "drink": "Drinks",
+        "hot_drink": "Hot Drinks",
+        "dessert": "Desserts",
+        "appetizer": "Appetizers",
+    }
+
+    for category_key in sorted(categories.keys()):
+        category_label = category_names.get(category_key, category_key.title())
+        lines.append(f"\n{category_label}:")
+        for item_name in categories[category_key]:
+            lines.append(f"  - {item_name}")
+
+    return "\n".join(lines)
