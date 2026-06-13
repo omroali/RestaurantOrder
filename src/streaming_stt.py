@@ -103,6 +103,8 @@ class StreamingTranscriber:
         # partial_interval is accepted for API compatibility but no longer used
         partial_interval: float = 0.3,
         sample_rate:      int   = 16_000,
+        debug_dir:        Optional[str] = None,
+        model_dir:        Optional[str] = None,
     ) -> None:
         self.model_size       = model_size
         self.language         = language
@@ -113,6 +115,8 @@ class StreamingTranscriber:
         self.max_utterance_seconds = max(1.0, max_utterance_seconds)
         self.pre_buffer_seconds = max(0.0, pre_buffer_seconds)
         self.sample_rate      = sample_rate
+        self._debug_dir       = debug_dir
+        self._model_dir       = model_dir
         self.enable_ambient_calibration = enable_ambient_calibration
         self.ambient_calibration_interval = max(1.0, ambient_calibration_interval)
         self.calibration_noise_floor_default = calibration_noise_floor_default
@@ -248,7 +252,7 @@ class StreamingTranscriber:
             vad.calibrate()
             self._threshold = vad.threshold
             print(f"[Calibration] Initial ambient noise floor calibrated at threshold: {self._threshold:.1f}")
-        
+
         self._calibrated.set()       # signal processor thread to start
 
         try:
@@ -317,7 +321,7 @@ class StreamingTranscriber:
             if not speech_active:
                 pre_buf.append(chunk)
                 _update_noise_floor(energy)
-                
+
                 # Periodic ambient calibration during idle
                 if self.enable_ambient_calibration:
                     current_time = time.time()
@@ -357,6 +361,15 @@ class StreamingTranscriber:
                         # ── Speech ended: transcribe ──────────────────────
                         print("[Transcribing…]", flush=True)
                         audio = b"".join(speech_buf)
+                        if self._debug_dir:
+                            import os as _os
+                            _os.makedirs(self._debug_dir, exist_ok=True)
+                            import wave as _wave
+                            with _wave.open(_os.path.join(self._debug_dir, "last_utterance.wav"), "wb") as _wf:
+                                _wf.setnchannels(1)
+                                _wf.setsampwidth(2)
+                                _wf.setframerate(self.sample_rate)
+                                _wf.writeframes(audio)
                         text  = self._transcribe(audio)
                         if text:
                             if self.on_final:
@@ -420,6 +433,7 @@ class StreamingTranscriber:
                 self.model_size,
                 device       = self.device,
                 compute_type = self.compute_type,
+                download_root = self._model_dir,
             )
             print("[StreamingSTT] Model ready.")
         return self._model

@@ -19,7 +19,7 @@ restaurant_voice.launch:
         <arg name="max_listen"    default="15.0"/>
 
         <!-- Always-on listener: microphone + hotword + transcription -->
-        <node name="voice_listener" pkg="restaurant_robot"
+        <node name="voice_listener" pkg="restaurant_language_unit"
               type="voice_listener_node.py" output="screen">
             <param name="wake_words"    value="$(arg wake_words)"/>
             <param name="hotword_model" value="tiny"/>
@@ -30,16 +30,16 @@ restaurant_voice.launch:
         </node>
 
         <!-- On-demand processor: dialogue + JSON output -->
-        <node name="order_processor" pkg="restaurant_robot"
+        <node name="order_processor" pkg="restaurant_language_unit"
               type="order_processor_node.py" output="screen">
             <param name="stt_model" value="$(arg stt_model)"/>
-            <rosparam file="$(find restaurant_robot)/config/menu.yaml"/>
+            <rosparam file="$(find restaurant_language_unit)/config/menu.yaml"/>
         </node>
     </launch>
 
 Run with:
-    roslaunch restaurant_robot restaurant_voice.launch
-    roslaunch restaurant_robot restaurant_voice.launch stt_model:=small
+    roslaunch restaurant_language_unit restaurant_voice.launch
+    roslaunch restaurant_language_unit restaurant_voice.launch stt_model:=small
 ──────────────────────────────────────────────────────────────────────────────
 
 Usage (prototype):

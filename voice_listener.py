@@ -35,7 +35,7 @@ Step 4  Main loop → rospy.spin():
     Replace the threading.Event().wait() loop in run() with rospy.spin().
 
 Step 5  roslaunch entry:
-    <node name="voice_listener" pkg="restaurant_robot"
+    <node name="voice_listener" pkg="restaurant_language_unit"
           type="voice_listener_node.py" output="screen">
         <param name="wake_words"    value="hey tiago,excuse me,order please"/>
         <param name="stt_model"     value="base"/>

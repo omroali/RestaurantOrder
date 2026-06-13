@@ -41,9 +41,9 @@ Step 5  run() → rospy.spin():
     Replace the time.sleep loop with rospy.spin().
 
 Step 6  roslaunch entry:
-    <node name="order_processor" pkg="restaurant_robot"
+    <node name="order_processor" pkg="restaurant_language_unit"
           type="order_processor_node.py" output="screen">
-        <rosparam file="$(find restaurant_robot)/config/menu.yaml"/>
+        <rosparam file="$(find restaurant_language_unit)/config/menu.yaml"/>
     </node>
 ──────────────────────────────────────────────────────────────────────────────
 """

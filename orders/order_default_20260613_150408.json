@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "line_id": 1,
+      "item_id": "cheeseburger",
+      "display_name": "Cheeseburger",
+      "quantity": 1,
+      "size": null,
+      "options": {},
+      "modifiers": [],
+      "confidence": 1.0
+    },
+    {
+      "line_id": 2,
+      "item_id": "coke",
+      "display_name": "Coke",
+      "quantity": 1,
+      "size": "large",
+      "options": {},
+      "modifiers": [],
+      "confidence": 1.0
+    }
+  ],
+  "status": "confirmed",
+  "confirmation_text": "Order confirmed: one Cheeseburger, and one large Coke"
+}

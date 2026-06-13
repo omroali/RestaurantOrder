@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- ──────────────────────────────────────────────────────────────────
+       Restaurant Language Unit – TIAGo Audio Mode
+
+       voice_listener captures audio from a ROS topic published by
+       TIAGo's onboard microphones (no USB mic required).
+
+       Prerequisites on TIAGo:
+         TIAGo must be publishing audio on the configured topic.
+         Check with:  rostopic list | grep -i audio
+
+         If no audio topic exists, start the audio capture on TIAGo:
+           roslaunch audio_capture capture_to_topic.launch
+         or enable TIAGo's speech recognition premium package.
+
+       Usage:
+         roslaunch restaurant_language_unit restaurant_voice_tiago.launch
+         roslaunch restaurant_language_unit restaurant_voice_tiago.launch \
+             audio_topic:=/audio/raw stt_model:=small
+       ─────────────────────────────────────────────────────────────────── -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Arguments
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <arg name="audio_topic"   default="/audio/raw"/>
+  <arg name="wake_words"    default="hey tiago, excuse me, order please"/>
+  <arg name="stt_model"     default="base"/>
+  <arg name="language"      default="en"/>
+  <arg name="device"        default="cpu"/>
+  <arg name="compute_type"  default="int8"/>
+  <arg name="silence_dur"   default="0.8"/>
+  <arg name="confirm_delay" default="2.0"/>
+  <arg name="sample_rate"   default="16000"/>
+  <arg name="pre_buffer"    default="0.4"/>
+  <arg name="max_utterance" default="10.0"/>
+  <arg name="interrupt_mult" default="6.0"/>
+  <arg name="tts_rate"      default="175"/>
+  <arg name="tts_volume"    default="1.0"/>
+  <arg name="model_dir"     default=""/>
+  <arg name="channels"      default="2"/>
+  <arg name="vad_threshold" default="500"/>
+  <arg name="table_id"      default="default"/>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Voice Listener Node  –  TIAGo audio topic → transcripts
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <node name="voice_listener" pkg="restaurant_language_unit"
+        type="voice_listener_ros_node.py" output="screen">
+
+    <!-- TIAGo audio topic (e.g. /audio/raw, /audio_capture/audio) -->
+    <param name="audio_topic"   value="$(arg audio_topic)"/>
+
+    <!-- Wake words -->
+    <param name="wake_words"    value="$(arg wake_words)"/>
+
+    <!-- faster-whisper model -->
+    <param name="stt_model"     value="$(arg stt_model)"/>
+    <param name="language"      value="$(arg language)"/>
+    <param name="device"        value="$(arg device)"/>
+    <param name="compute_type"  value="$(arg compute_type)"/>
+
+    <!-- VAD / silence detection -->
+    <param name="silence_dur"   value="$(arg silence_dur)"/>
+    <param name="confirm_delay" value="$(arg confirm_delay)"/>
+    <param name="sample_rate"   value="$(arg sample_rate)"/>
+    <param name="pre_buffer_seconds" value="$(arg pre_buffer)"/>
+    <param name="max_utterance_seconds" value="$(arg max_utterance)"/>
+
+    <!-- VAD threshold (TIAGo audio is pre-gained, so we use a fixed threshold) -->
+    <param name="channels" value="$(arg channels)"/>
+    <param name="vad_threshold" value="$(arg vad_threshold)"/>
+    <param name="debug_dir" value="/tmp/utterances"/>
+    <param name="model_dir" value="$(arg model_dir)"/>
+
+    <!-- VAD threshold (TIAGo audio is pre-gained) -->
+
+    <!-- Barge-in / interruption -->
+    <param name="interrupt_multiplier" value="$(arg interrupt_mult)"/>
+
+    <!-- TTS (pyttsx3, optional) -->
+    <param name="tts_rate"      value="$(arg tts_rate)"/>
+    <param name="tts_volume"    value="$(arg tts_volume)"/>
+  </node>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Order Processor Node  –  dialogue + order parsing
+       ═══════════════════════════════════════════════════════════════════ -->
+
+  <node name="order_processor" pkg="restaurant_language_unit"
+        type="order_processor_node.py" output="screen">
+
+    <param name="table_id" value="$(arg table_id)"/>
+
+    <rosparam command="load"
+              file="$(find restaurant_language_unit)/menu.json"
+              ns="order_processor/menu"/>
+  </node>
+
+</launch>
