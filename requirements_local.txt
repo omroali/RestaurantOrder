@@ -1,0 +1,16 @@
+# Local testing dependencies (venv, no ROS needed)
+# Install:  pip install -r requirements_local.txt
+#
+# This gives you the DialogueManager + menu for local testing.
+# No microphone, no STT, no ROS — just the order parsing & dialogue logic.
+
+# Core dialogue engine (standard library only — no pip deps needed)
+#   src/dialogue_manager.py
+#   src/order_parser.py
+#   src/order_state.py
+#   src/models.py
+#   src/utils.py
+
+# For running the PNP plans with a real TIAGo:
+#   - rospy (comes with ROS)
+#   - std_msgs (comes with ROS)

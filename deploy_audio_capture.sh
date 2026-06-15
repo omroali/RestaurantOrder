@@ -19,7 +19,7 @@
 
 set -e
 
-ROBOT_PW="${ROBOT_PW:-palroot}"
+ROBOT_PW="${ROBOT_PW:-palroot}"  # only used as fallback if keys not set up
 
 # ── Resolve robot IDs to IPs ───────────────────────────────────────────
 
@@ -41,7 +41,7 @@ deploy_one() {
     echo " Deploying audio_capture to $ip …"
     echo "========================================"
 
-    sshpass -p "$ROBOT_PW" ssh -o StrictHostKeyChecking=no root@"$ip" '
+    ssh -o StrictHostKeyChecking=no root@"$ip" '
         set -e
 
         # 1. Install audio_common

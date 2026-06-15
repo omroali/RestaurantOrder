@@ -41,19 +41,19 @@ fi
 # e.g. http://10.68.0.1:11311 → 10.68.0.1
 TIAGO_IP=$(echo "$ROS_MASTER_URI" | sed -n 's|http://\([^/:]*\).*|\1|p')
 TIAGO_IP="${TIAGO_IP:-10.68.0.1}"
-TIAGO_PW="${TIAGO_PW:-palroot}"
+TIAGO_PW="${TIAGO_PW:-palroot}"  # only used as fallback
 
 # ── Start audio_capture on TIAGo if not already publishing ────────────
 rostopic list 2>/dev/null | grep -q "/audio/audio" || {
     echo "[restaurant_voice] /audio/audio not found — starting audio_capture on TIAGo ($TIAGO_IP) …"
 
     # Kill any existing audio_capture first
-    sshpass -p "$TIAGO_PW" ssh -o StrictHostKeyChecking=no root@"$TIAGO_IP" \
+    ssh -o StrictHostKeyChecking=no root@"$TIAGO_IP" \
         'pkill -f audio_capture' 2>/dev/null || true
     sleep 1
 
     # Start audio_capture in background on TIAGo
-    sshpass -p "$TIAGO_PW" ssh -o StrictHostKeyChecking=no root@"$TIAGO_IP" \
+    ssh -o StrictHostKeyChecking=no root@"$TIAGO_IP" \
         'source /opt/ros/noetic/setup.bash && \
          nohup roslaunch audio_capture capture.launch \
              device:=plughw:2,0 format:=wave sample_rate:=16000 \

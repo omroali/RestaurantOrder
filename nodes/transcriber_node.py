@@ -122,6 +122,7 @@ def main():
     confirm_del  = rospy.get_param("~confirm_delay", 3.0)
     threshold    = rospy.get_param("~vad_threshold", 200)
     pre_buffer    = rospy.get_param("~pre_buffer_seconds", 1.0)
+    enable_ambient_cal = rospy.get_param("~enable_ambient_calibration", False)
 
     # Self-echo prevention: mute VAD while robot speaks.
     # Text-based filtering is also applied as a safety net.
@@ -137,6 +138,14 @@ def main():
 
     rospy.Subscriber("/robot/speaking", String, _on_robot_speech)
 
+    def _on_listen_cmd(msg):
+        transcriber.should_listen = bool(msg.data)
+        if transcriber.should_listen:
+            rospy.loginfo("[Transcriber] Active listening ON")
+        else:
+            rospy.loginfo("[Transcriber] Active listening OFF")
+    rospy.Subscriber("/transcriber/listen", String, _on_listen_cmd)
+
     interruption_pub = rospy.Publisher("/transcriber/interruption", String, queue_size=5)
 
     pub = rospy.Publisher("/transcriber/text", String, queue_size=10)
@@ -150,7 +159,7 @@ def main():
         # the robot just said, ignore it.
         # Filter self-echo only if robot spoke recently (within 5s)
         age = rospy.get_time() - said_by_robot[1]
-        if said_by_robot[0] and age < 5.0 and said_by_robot[0] in text.lower():
+        if said_by_robot[0] and age < 5.0 and text.lower() in said_by_robot[0]:
             rospy.loginfo(f"[Self-echo filtered]: {text}")
             return
 
@@ -175,6 +184,7 @@ def main():
         sample_rate=sample_rate,
         calibration_threshold_default=threshold,
         pre_buffer_seconds=pre_buffer,
+        enable_ambient_calibration=enable_ambient_cal,
     )
 
     # Eagerly load model to avoid first-utterance delay

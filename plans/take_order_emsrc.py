@@ -1,8 +1,5 @@
 """
-take_order_full.py  –  PNP plan: full à la carte ordering (stress test).
-
-Uses the original DialogueManager for item-by-item ordering with
-corrections, clarifications, and confirmations.
+take_order_full.py  –  PNP plan: take a menu order by voice.
 
 Prerequisites:
   rosrun restaurant_language_unit transcriber_node.py _model:=small
@@ -20,7 +17,7 @@ _PKG  = os.path.dirname(_HERE)
 if _PKG not in sys.path:
     sys.path.insert(0, _PKG)
 
-from src.dialogue_manager import DialogueManager
+from src.menu_dialogue import MenuDialogue
 
 try:
     sys.path.insert(0, os.environ["PNP_HOME"] + '/scripts')
@@ -69,47 +66,32 @@ def _stop_listening():
         listen_pub.publish(String(data="0"))
 
 
-def take_order(p, table_id="default"):
-    menu = _load_menu()
-    manager = DialogueManager(menu)
+def take_order(p):
+    dialogue = MenuDialogue()
 
-    greeting = ("Hello!_I'll_be_serving_you_today._"
-                "You_can_ask_what's_on_the_menu,_"
-                "or_just_tell_me_what_you'd_like.")
-    _say(p, greeting)
+    # 1. Greeting → get menu list
+    response, done = dialogue.process("")
+    _say(p, response)
 
-    done = False
+    # 2. Conversation loop
     while not done:
         text = _listen(p)
         if text is None:
-            _say(p, "I_didn't_catch_that._Could_you_repeat_your_order?")
+            _say(p, "I_didn't_catch_that._Could_you_repeat?")
             continue
 
-        if any(w in text.lower() for w in ["cancel", "never mind", "stop", "abort"]):
-            _say(p, "Understood._Cancelling_your_order.")
-            manager.reset(table_id=table_id)
-            return None
+        response, done = dialogue.process(text)
+        _say(p, response)
 
-        response, done = manager.process_input(text, table_id=table_id)
-        _say(p, response.replace(' ', '_'))
-
-    final_order = manager.get_final_json(table_id=table_id)
-    rospy.loginfo(f"Order confirmed: {json.dumps(final_order, indent=2)}")
+    # 3. Output order
+    order = dialogue.get_order()
+    rospy.loginfo(f"Order confirmed: {json.dumps(order, indent=2)}")
 
     order_pub = rospy.Publisher('/restaurant/order_result', String, queue_size=1, latch=True)
-    order_pub.publish(String(data=json.dumps(final_order)))
-    rospy.set_param('/restaurant/last_order', final_order)
+    order_pub.publish(String(data=json.dumps(order)))
+    rospy.set_param('/restaurant/last_order', order)
 
-    _say(p, "Thank_you._Your_order_will_be_ready_shortly.")
-    return final_order
-
-
-def _load_menu():
-    path = os.path.join(_PKG, "menu.json")
-    if os.path.exists(path):
-        with open(path) as f:
-            return json.load(f)
-    return []
+    return order
 
 
 if __name__ == "__main__":

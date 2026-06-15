@@ -1,0 +1,25 @@
+# Transcriber node defaults
+# Loaded by: roslaunch restaurant_language_unit restaurant_voice_tiago.launch
+# Override at runtime: rosrun transcriber_node.py _silence_dur:=1.5
+
+# ── Audio source ──────────────────────────────────────────────────────
+audio_topic: /audio/audio       # ROS topic from TIAGo's audio_capture
+channels: 1                      # 1=mono (USB mic), 2=stereo (Andrea array)
+sample_rate: 16000               # Hz — must match audio_capture output
+
+# ── STT engine (faster-whisper) ───────────────────────────────────────
+model: small                     # tiny | base | small | medium
+language: en
+device: cpu
+compute_type: int8
+
+# ── Voice Activity Detection ──────────────────────────────────────────
+vad_threshold: 200               # Energy threshold (0=auto-calibrate)
+silence_dur: 1.2                 # Seconds of silence before pause detected
+confirm_delay: 3.0               # Extra silence before finalizing utterance
+pre_buffer_seconds: 1.0          # Audio kept before speech triggers
+max_utterance_seconds: 15.0      # Hard cap on single utterance length
+
+# ── Self-echo prevention ──────────────────────────────────────────────
+# Robot publishes what it's about to say on /robot/speaking.
+# Transcriber filters matching text + mutes VAD while robot speaks.

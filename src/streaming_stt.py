@@ -137,6 +137,7 @@ class StreamingTranscriber:
 
         # Barge-in / Interruption handling
         self.is_robot_speaking = False
+        self.should_listen = True   # gated by /transcriber/listen
         self.interrupt_multiplier = interrupt_multiplier   # Scale threshold when robot speaks
 
     # ------------------------------------------------------------------
@@ -275,7 +276,7 @@ class StreamingTranscriber:
         """
         CHUNK_MS  = VoiceActivityDetector.CHUNK_MS
         SILENCE_N = max(1, int(self.silence_duration * 1000 / CHUNK_MS))
-        CONFIRM_N = max(1, int(self.confirmation_delay * 1000 / CHUNK_MS))
+        CONFIRM_N = min(5, max(1, int(self.confirmation_delay * 1000 / CHUNK_MS)))
         MAX_N     = max(1, int(self.max_utterance_seconds * 1000 / CHUNK_MS))
         PRE_N     = max(1, int(self.pre_buffer_seconds * 1000 / CHUNK_MS))
 
@@ -311,7 +312,7 @@ class StreamingTranscriber:
 
             # If robot is speaking, discard audio to prevent self-echo
             # Don't just raise threshold - completely skip speech detection
-            if self.is_robot_speaking:
+            if self.is_robot_speaking or not self.should_listen:
                 pre_buf.append(chunk)  # Keep pre-buffer for when robot stops
                 continue
 
@@ -414,7 +415,7 @@ class StreamingTranscriber:
                 language           = self.language,
                 beam_size          = 5,
                 best_of            = 5,
-                vad_filter         = True,
+                vad_filter         = False,  # our own VAD is sufficient
                 without_timestamps = True,
             )
             return " ".join(s.text.strip() for s in segments).strip()

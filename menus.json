@@ -1,0 +1,32 @@
+[
+  {
+    "id": "menu_1",
+    "name": "Menu 1",
+    "description": "Sandwich and a slice of pie",
+    "items": ["Sandwich", "Slice of Pie"]
+  },
+  {
+    "id": "menu_2",
+    "name": "Menu 2",
+    "description": "Hot dog, chips, and chocolate chip cookies",
+    "items": ["Hot Dog", "Chips", "Chocolate Chip Cookies"]
+  },
+  {
+    "id": "menu_3",
+    "name": "Menu 3",
+    "description": "Waffle with bacon",
+    "items": ["Waffle with Bacon"]
+  },
+  {
+    "id": "menu_4",
+    "name": "Menu 4",
+    "description": "Crab with lemon and a slice of pie",
+    "items": ["Crab with Lemon", "Slice of Pie"]
+  },
+  {
+    "id": "menu_5",
+    "name": "Menu 5",
+    "description": "Slice of pizza, prawn, and cookies",
+    "items": ["Slice of Pizza", "Prawn", "Cookies"]
+  }
+]
